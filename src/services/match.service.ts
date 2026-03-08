@@ -129,10 +129,10 @@ export async function autoDisburse(matchId: string): Promise<void> {
     let prizeTx: string
 
     if (match.winner === 'draw') {
-      if (!match.guest_public_key) throw new Error('Draw but guest address is missing')
+      if (!match.guest_public_key && prizeAmount > 0) throw new Error('Draw but guest address is missing')
       const { hostTx, guestTx } = await sendDrawRefunds(
         match.host_public_key,
-        match.guest_public_key,
+        match.guest_public_key ?? match.host_public_key,
         prizeAmount,
       )
       prizeTx = `host:${hostTx};guest:${guestTx}`
@@ -153,6 +153,44 @@ export async function autoDisburse(matchId: string): Promise<void> {
 }
 
 // ── CRUD ──────────────────────────────────────────────────────────────────────
+
+import { randomBytes } from 'crypto'
+
+export async function createLocalPlayMatch(publicKey: string): Promise<MatchRow> {
+  const code = randomBytes(3).toString('hex').toUpperCase()
+  const id = generateId()
+
+  const { data, error } = await supabase
+    .from('matches')
+    .insert({
+      id,
+      code,
+      host_public_key: publicKey,
+      guest_public_key: publicKey,
+      stake_amount: 0,
+      time_control: 600, // 10 minutes default for dev testing
+      host_color: 'white',
+      guest_color: 'black',
+      host_staked: true,   // Auto stake
+      guest_staked: true,  // Auto stake
+      host_tx: `local-${Date.now()}-h`,
+      guest_tx: `local-${Date.now()}-g`,
+      status: 'active',    // Go straight into game
+      fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      pgn: '',
+      moves: [],
+      turn: 'w',
+      clock_white: 600 * 1000,
+      clock_black: 600 * 1000,
+      clock_last_updated: Date.now(),
+      started_at: new Date().toISOString(),
+    })
+    .select('*')
+    .single()
+
+  if (error) throw new Error(`Failed to create local match: ${error.message}`)
+  return data as MatchRow
+}
 
 export async function createMatch(
   hostPublicKey: string,
@@ -287,7 +325,9 @@ export async function confirmStake(
   }
 
   // Verify transaction on-chain (throws if invalid)
-  await verifyStakeTransaction(txSignature, match.stake_amount, publicKey)
+  if (match.stake_amount > 0) {
+    await verifyStakeTransaction(txSignature, match.stake_amount, publicKey)
+  }
 
   const updates: Record<string, unknown> = isHost
     ? { host_staked: true, host_tx: txSignature }
@@ -331,9 +371,18 @@ export async function applyMove(
   const isGuest = match.guest_public_key === publicKey
   if (!isHost && !isGuest) throw new Error('Not a participant')
 
-  const playerColor = isHost ? match.host_color : match.guest_color
+  const isLocalPlay = match.host_public_key === match.guest_public_key
+
+  // If local play, the "playerColor" dynamically matches whose turn it is
+  const playerColor = isLocalPlay
+    ? (match.turn === 'w' ? 'white' : 'black')
+    : (isHost ? match.host_color : match.guest_color)
+
   const chessColor = playerColor === 'white' ? 'w' : 'b'
-  if (match.turn !== chessColor) throw new Error('Not your turn')
+
+  if (!isLocalPlay && match.turn !== chessColor) {
+    throw new Error('Not your turn')
+  }
 
   // ── P0: Server-computed clock ────────────────────────────────────────────
   // Compute how much time this player has left based on server timestamps.
@@ -361,7 +410,16 @@ export async function applyMove(
 
   // chess.js validates the move — throws if invalid
   const game = new Chess(match.fen)
-  const result = game.move({ from, to, promotion: 'q' })
+  console.log('[DEBUG makeMove]', { from, to, fen: match.fen, color: playerColor, turn: match.turn })
+
+  let result;
+  try {
+    result = game.move({ from, to, promotion: 'q' })
+  } catch (err: any) {
+    console.error('[DEBUG makeMove error]', err.message)
+    throw err
+  }
+
   if (!result) throw new Error('Invalid move')
 
   const newMoves = [...match.moves, `${from}${to}`]

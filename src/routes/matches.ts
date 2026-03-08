@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import {
   createMatch,
+  createLocalPlayMatch,
   getMatchByCode,
   getMatchResolved,
   joinMatch,
@@ -46,14 +47,26 @@ matchRouter.post(
   '/',
   wrap(async (req, res) => {
     const { hostPublicKey, stakeAmount, timeControl } = req.body
-    if (!hostPublicKey || !stakeAmount || !timeControl) {
+    if (!hostPublicKey || stakeAmount === undefined || !timeControl) {
       return err(res, 400, 'hostPublicKey, stakeAmount, and timeControl are required')
     }
-    if (stakeAmount < 1_000_000) return err(res, 400, 'Minimum stake is 0.001 SOL')
+    if (stakeAmount < 0) return err(res, 400, 'Stake cannot be negative')
     if (![60, 120, 180].includes(timeControl)) return err(res, 400, 'Invalid time control')
 
     const result = await createMatch(hostPublicKey, stakeAmount, timeControl)
     ok(res, result)
+  }),
+)
+
+/** POST /api/matches/local-play — Instantly create a dual-sided development match */
+matchRouter.post(
+  '/local-play',
+  wrap(async (req, res) => {
+    const { publicKey } = req.body
+    if (!publicKey) return err(res, 400, 'publicKey is required')
+
+    const result = await createLocalPlayMatch(publicKey)
+    ok(res, { matchId: result.id })
   }),
 )
 

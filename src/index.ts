@@ -176,9 +176,6 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' })
 })
 
-app.listen(PORT, () => {
-  console.log(`[chessbet-server] Listening on http://localhost:${PORT}`)
-  console.log(`[chessbet-server] Supabase: ${process.env.SUPABASE_URL}`)
-  console.log(`[chessbet-server] Solana RPC: ${process.env.SOLANA_RPC_URL}`)
-  console.log(`[chessbet-server] Treasury: ${process.env.TREASURY_PUBLIC_KEY}`)
+app.listen(PORT as number, '0.0.0.0', () => {
+  console.log(`[chessbet-server] Listening on http://0.0.0.0:${PORT}`)
 })

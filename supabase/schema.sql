@@ -60,6 +60,9 @@ ALTER TABLE matches ADD CONSTRAINT unique_guest_tx UNIQUE (guest_tx);
 -- (Do this in: Supabase dashboard → Database → Replication → Realtime → matches toggle ON)
 ALTER PUBLICATION supabase_realtime ADD TABLE matches;
 
+-- Force Realtime to send the full row payload on every UPDATE instead of just changed columns
+ALTER TABLE matches REPLICA IDENTITY FULL;
+
 -- Row Level Security: allow all for now (tighten before mainnet)
 ALTER TABLE matches ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all reads" ON matches FOR SELECT USING (true);
