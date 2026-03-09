@@ -324,7 +324,7 @@ export async function confirmStake(
     throw new Error('Transaction signature already used')
   }
 
-  // Verify transaction on-chain (throws if invalid)
+  // Verify transaction through treasury (throws if invalid)
   if (match.stake_amount > 0) {
     await verifyStakeTransaction(txSignature, match.stake_amount, publicKey)
   }

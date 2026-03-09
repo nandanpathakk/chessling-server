@@ -53,7 +53,7 @@ export async function verifyStakeTransaction(
   })
 
   if (!tx) throw new Error('Transaction not found or not confirmed')
-  if (tx.meta?.err) throw new Error('Transaction failed on-chain')
+  if (tx.meta?.err) throw new Error('Transaction failed on the network')
 
   // Find the system program transfer instruction
   const transferInstr = tx.transaction.message.instructions.find((ix: any) => {

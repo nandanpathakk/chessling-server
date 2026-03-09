@@ -113,7 +113,7 @@ matchRouter.post(
     const { publicKey, txSignature } = req.body
     if (!publicKey || !txSignature) return err(res, 400, 'publicKey and txSignature are required')
 
-    // TODO (production): verify the txSignature on-chain to confirm the SOL
+    // TODO (production): verify the txSignature transaction to confirm the SOL
     // actually arrived at the treasury before marking as staked.
 
     const result = await confirmStake(id, publicKey, txSignature)
